@@ -1,47 +1,69 @@
-#include <stdlib.h>
 #include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
-#include <time.h>
-#include "socket.h"
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/types.h>
 
+static const char* socket_path = "socket.soc";
+static const unsigned int s_recv_len = 200;
+static const unsigned int s_send_len = 100;
 
-int main(int argc, char *argv[])
+int main()
 {
-	struct sockaddr srvr_name;
-	int sock;
-    int bytes;
-    int namelen;
+	int sock = 0;
+	int data_len = 0;
+	struct sockaddr_un remote;
+	char recv_msg[s_recv_len];
+	char send_msg[s_send_len];
+	char msg[s_send_len];
 
-	char buf[MAX_MSG_LEN];
-    long int curr_time = time(NULL);
+	memset(recv_msg, 0, s_recv_len*sizeof(char));
+	memset(send_msg, 0, s_send_len*sizeof(char));
 
-	sprintf(buf, "\nProcess id = %d \nSended at time: %sMessage: ", getpid(), ctime(&curr_time));
+	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1  )
+	{
+		printf("error socket \n");
+		return 1;
+	}
 
-    if (argc < 2)
-		strcat(buf, "Hello server!");
+	remote.sun_family = AF_UNIX;
+	strcpy( remote.sun_path, socket_path);
+	data_len = strlen(remote.sun_path) + sizeof(remote.sun_family);
+
+	if (connect(sock, (struct sockaddr*)&remote, data_len) == -1)
+	{
+		printf("error in connect \n");
+		return 1;
+	}
+
+	printf("Client: Connected \n");
+	sprintf(msg, "client pid = %d", getpid());
+
+	if (send(sock, msg, strlen(msg)*sizeof(char), 0 ) == -1)
+	{
+		printf("send error \n");
+	}
+
+	memset(send_msg, 0, s_send_len*sizeof(char));
+	memset(recv_msg, 0, s_recv_len*sizeof(char));
+
+	if ((data_len = recv(sock, recv_msg, s_recv_len, 0)) > 0)
+	{
+		printf("%s \n", recv_msg);
+	}
 	else
-		strcat(buf, argv[1]);
-
-	sock = socket(AF_UNIX, SOCK_DGRAM, 0);
-	if (sock < 0)
 	{
-		perror("Error in function: socket");
-		return ERROR_CREATE_SOCKET;
+		if (data_len < 0)
+		{
+			printf("recv error \n");
+		}
+		else
+		{
+			printf("socket is closed \n");
+			close(sock);
+		}
 	}
 
-    srvr_name.sa_family = AF_UNIX;
-	strcpy(srvr_name.sa_data, SOCK_NAME);
-
-	if (sendto(sock, buf, strlen(buf) + 1, 0, &srvr_name, LEN_STRUCT_SOCKADDR(srvr_name)) < 0)
-	{
-		perror("Error in SendTO");
-		return ERROR_SENDTO_SOCKET;
-	}
-    printf("Message is sent to server!\n");
-
-	close(sock);
-	return OK;
+	return 0;
 }
